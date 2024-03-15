@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"html/template"
+	"log"
 	"time"
 
 	"github.com/vanng822/go-premailer/premailer"
@@ -21,19 +22,20 @@ type Mail struct {
 }
 
 type Message struct {
-	From         string
-	FromName     string
-	To           string
-	Subject      string
-	Attachements []string //pathname
-	Data         any
-	DataMap      map[string]any
+	From        string
+	FromName    string
+	To          string
+	Subject     string
+	Attachments []string
+	Data        any
+	DataMap     map[string]any
 }
 
 func (m *Mail) SendSMTPMessage(msg Message) error {
 	if msg.From == "" {
 		msg.From = m.FromAddress
 	}
+
 	if msg.FromName == "" {
 		msg.FromName = m.FromName
 	}
@@ -41,6 +43,7 @@ func (m *Mail) SendSMTPMessage(msg Message) error {
 	data := map[string]any{
 		"message": msg.Data,
 	}
+
 	msg.DataMap = data
 
 	formattedMessage, err := m.buildHTMLMessage(msg)
@@ -58,30 +61,38 @@ func (m *Mail) SendSMTPMessage(msg Message) error {
 	server.Port = m.Port
 	server.Username = m.Username
 	server.Password = m.Password
-	server.Encryption = m.getEncryption(m.Encryption) //support multiple mail servers
+	server.Encryption = m.getEncryption(m.Encryption)
 	server.KeepAlive = false
 	server.ConnectTimeout = 10 * time.Second
 	server.SendTimeout = 10 * time.Second
 
 	smtpClient, err := server.Connect()
 	if err != nil {
+		log.Println(err)
 		return err
 	}
+
 	email := mail.NewMSG()
-	email.SetFrom(msg.From).AddTo(msg.To).SetSubject(msg.Subject)
+	email.SetFrom(msg.From).
+		AddTo(msg.To).
+		SetSubject(msg.Subject)
+
 	email.SetBody(mail.TextPlain, plainMessage)
 	email.AddAlternative(mail.TextHTML, formattedMessage)
-	if len(msg.Attachements) > 0 {
-		for _, x := range msg.Attachements {
+
+	if len(msg.Attachments) > 0 {
+		for _, x := range msg.Attachments {
 			email.AddAttachment(x)
 		}
 	}
+
 	err = email.Send(smtpClient)
 	if err != nil {
+		log.Println(err)
 		return err
 	}
-	return nil
 
+	return nil
 }
 
 func (m *Mail) buildHTMLMessage(msg Message) (string, error) {
@@ -91,6 +102,7 @@ func (m *Mail) buildHTMLMessage(msg Message) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	var tpl bytes.Buffer
 	if err = t.ExecuteTemplate(&tpl, "body", msg.DataMap); err != nil {
 		return "", err
@@ -101,6 +113,7 @@ func (m *Mail) buildHTMLMessage(msg Message) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	return formattedMessage, nil
 }
 
@@ -111,6 +124,7 @@ func (m *Mail) buildPlainTextMessage(msg Message) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	var tpl bytes.Buffer
 	if err = t.ExecuteTemplate(&tpl, "body", msg.DataMap); err != nil {
 		return "", err
@@ -127,14 +141,17 @@ func (m *Mail) inlineCSS(s string) (string, error) {
 		CssToAttributes:   false,
 		KeepBangImportant: true,
 	}
+
 	prem, err := premailer.NewPremailerFromString(s, &options)
 	if err != nil {
 		return "", err
 	}
+
 	html, err := prem.Transform()
 	if err != nil {
 		return "", err
 	}
+
 	return html, nil
 }
 
